@@ -16,6 +16,10 @@
       "tags": "scan"
     },
     {
+      "name": "WKCamera",
+      "tags": "wkcamera"
+    },
+    {
       "name": "History",
       "tags": "history"
     },

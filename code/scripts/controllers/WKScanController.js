@@ -7,7 +7,7 @@ import DSUDataRetrievalService from "../services/DSUDataRetrievalService/DSUData
 
 const gtinResolver = require("gtin-resolver");
 
-export default class ScanController extends ContainerController {
+export default class WKScanController extends ContainerController {
     constructor(element, history) {
         super(element, history);
 

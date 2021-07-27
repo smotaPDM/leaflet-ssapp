@@ -33,6 +33,20 @@
                     <psk-input view-model="@useScanditLicense"></psk-input>
                     <psk-button label="Set" event-name="set-scandit-license"></psk-button>
                 </psk-accordion-item>
+
+                <!-- ACDC SETTINGS -->
+                <psk-accordion-item title="Setup Anti-Counterfeiting Integration">
+                    <psk-select view-model="acdc.enabled"></psk-select>
+<!--                    <psk-checkbox view-model="acdc.enabled"></psk-checkbox>-->
+                    <psk-condition condition="@acdc.enabled.value">
+                        <psk-select view-model="acdc.did"></psk-select>
+                        <psk-select view-model="acdc.location"></psk-select>
+
+<!--                    <psk-checkbox view-model="acdc.did"></psk-checkbox>-->
+ <!--                    <psk-checkbox view-model="acdc.location"></psk-checkbox>-->
+                    </psk-condition>
+
+                </psk-accordion-item>
             </psk-accordion>
         </psk-container>
 
@@ -50,6 +64,5 @@
                 <psk-img class="navbar-img" src="assets/images/footer/about.png" height='22'></psk-img>
             </psk-link>
         </div>
-
     </psk-mobile>
 </psk-example>
