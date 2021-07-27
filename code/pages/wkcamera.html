@@ -1,30 +1,36 @@
 <psk-example class="mobile-example">
     <style>
-        #scandit-barcode-picker video {
-            width: 100% !important;
+        .cameraImg{
+            width: 100vw !important;
             height: 100vh !important;
+        }
+        .fullwidth{
+            width: 100vw !important;
+            min-height: 40px;
         }
     </style>
     <psk-mobile disable-sidebar enable-back class="noPadding">
         <psk-container controller-name="WKScanController">
-            <psk-condition condition="@hasError">
-                <psk-label slot="condition-true" class="products-does-not-exist"
-                           label="Product scanned does not exist."></psk-label>
-            </psk-condition>
-            <psk-condition condition="@useScandit">
-                <div slot="condition-true" id="scandit-barcode-picker-wrapper">
-                    <div id="scandit-barcode-picker"></div>
+            <psk-label class="fullwidth" label="SM-001" ></psk-label>
+            <psk-select view-model="@cameraResolution">
+            </psk-select>
+
+            <psk-button label="Start" event-name="camera-start"></psk-button>
+            <psk-button label="Stop" event-name="camera-stop"></psk-button>
+            <psk-button label="Picture" event-name="camera-picture"></psk-button>
+            <psk-button label="Flash" event-name="camera-flash"></psk-button>
+            <psk-img class="cameraImg"  src="@WKCameraImage"></psk-img>
+
+            <psk-condition condition="@nativeSupport">
+                <div slot="condition-true">
+                    In a few seconds a native API will pop on you screen and guide you.
                 </div>
-                <psk-condition slot="condition-false" condition="@hasCode">
-                    <psk-condition condition="@nativeSupport" slot="condition-false">
-                        <psk-barcode-scanner slot="condition-false" data="@data" normal-size></psk-barcode-scanner>
-                        <div slot="condition-true">
-                            In a few seconds a native API will pop on you screen and guide you.
-                        </div>
-                    </psk-condition>
-                    <psk-ui-loader slot="condition-true" should-be-rendered="true"></psk-ui-loader>
-                </psk-condition>
+                <div slot="condition-false">
+                    Only for iOS devices.
+                </div>
             </psk-condition>
+             
+
         </psk-container>
     </psk-mobile>
 </psk-example>
