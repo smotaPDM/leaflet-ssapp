@@ -1,17 +1,24 @@
-<psk-example class="mobile-example">
+<psk-example class="mobile-example" opened>
     <style>
         .cameraImg{
             width: 100vw !important;
             height: 100vh !important;
+            min-height: 100px;
+            background-color: yellow;
         }
         .fullwidth{
             width: 100vw !important;
             min-height: 40px;
         }
     </style>
-    <psk-mobile disable-sidebar enable-back class="noPadding">
-        <psk-container controller-name="WKScanController">
-            <psk-label class="fullwidth" label="SM-001" ></psk-label>
+    <div id="div-psk-mobile" opened>
+    <psk-mobile disable-sidebar enable-back class="noPadding" opened>
+        <psk-container id="wkscan" controller-name="WKScanController" opened>
+            
+            <psk-label class="fullwidth" label="SM1-004" ></psk-label>
+            <psk-label class="fullwidth" label="@wkTempMessage" ></psk-label>
+            <psk-label class="fullwidth" label="@status_fps_preview" ></psk-label>
+
             <psk-select view-model="@cameraResolution">
             </psk-select>
 
@@ -19,8 +26,8 @@
             <psk-button label="Stop" event-name="camera-stop"></psk-button>
             <psk-button label="Picture" event-name="camera-picture"></psk-button>
             <psk-button label="Flash" event-name="camera-flash"></psk-button>
-            <psk-img class="cameraImg"  src="@WKCameraImage"></psk-img>
-
+            <psk-img class="cameraImg"  src="@wkCameraImage"></psk-img>
+            <canvas id='cameraCanvas'></canvas>   
             <psk-condition condition="@nativeSupport">
                 <div slot="condition-true">
                     In a few seconds a native API will pop on you screen and guide you.
@@ -29,8 +36,7 @@
                     Only for iOS devices.
                 </div>
             </psk-condition>
-             
-
         </psk-container>
     </psk-mobile>
+    </div>
 </psk-example>
