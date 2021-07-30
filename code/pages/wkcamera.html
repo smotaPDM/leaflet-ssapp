@@ -2,26 +2,24 @@
     <style>
         .cameraImg{
             width: 100vw !important;
-            height: 100vh !important;
+            height: auto;
+            max-height: 40vh;
             min-height: 100px;
-            background-color: yellow;
         }
         .fullwidth{
             width: 100vw !important;
             min-height: 40px;
         }
-    </style>
-    <div id="div-psk-mobile" opened>
-    <psk-mobile disable-sidebar enable-back class="noPadding" opened>
-        <psk-container id="wkscan" controller-name="WKScanController" opened>
-            
+    </style> 
+    <psk-mobile disable-sidebar enable-back class="noPadding" >
+        <psk-container controller-name="WKScanController" >
             <psk-label class="fullwidth" label="SM1-004" ></psk-label>
             <psk-label class="fullwidth" label="@wkTempMessage" ></psk-label>
             <psk-label class="fullwidth" label="@status_fps_preview" ></psk-label>
-
+            
             <psk-select view-model="@cameraResolution">
             </psk-select>
-
+            
             <psk-button label="Start" event-name="camera-start"></psk-button>
             <psk-button label="Stop" event-name="camera-stop"></psk-button>
             <psk-button label="Picture" event-name="camera-picture"></psk-button>

@@ -1,8 +1,4 @@
 import ContainerController from '../../cardinal/controllers/base-controllers/ContainerController.js';
-import utils from "../../utils.js";
-import constants from "../../constants.js";
-import DSUDataRetrievalService from "../services/DSUDataRetrievalService/DSUDataRetrievalService.js";
-
 const gtinResolver = require("gtin-resolver");
 
 
@@ -23,7 +19,7 @@ export default class WKScanController extends ContainerController {
         this.setModel({ data: '', hasCode: false, hasError: false, nativeSupport: false, useScandit: false });
 
 
-        let resolutions = [
+         let resolutions = [
             { label: "hd1280x720", value: "1280" },
             { label: "hd1920x1080", value: "1920" },
             { label: "hd4K3840x2160", value: "3840" },
@@ -87,33 +83,6 @@ export default class WKScanController extends ContainerController {
                 "previewWidth": previewWidth
             };
             this.callNative("StartCamera", params);
-            /*
-                        this.getNativeApiHandler((err, handler) => {
-                            if (err) {
-                                console.log("Not able to activate native API support. Continue using bar code scanner from web.", err);
-                            }
-                            else if (handler) {
-                                this.model.nativeSupport = true; 
-                                this.model.wkTempMessage = "handler - camera-nativeOperation";
-                                const nativeOperation = handler.importNativeAPI("WKStartCamera");
-                
-                                nativeOperation().then((resultArray) => {
-                                    this.model.wkTempMessage = "camera-nativeOperation OK";
-                                    if (resultArray && resultArray.length > 0) {
-                                        console.log(resultArray);
-                                        this.model.wkTempMessage = "camera-resultArray" + resultArray;
-                                    }
-                                }, (error) => {
-                                    this.redirectToError("operation failded");
-                                    this.model.wkTempMessage = "camera-nativeOperation ERROR";
-                                  
-                                }).catch((err) => {
-                                    this.model.wkTempMessage = "camera-nativeOperation catch";
-                                    this.redirectToError("Code scanning and processing finished with errors.");
-                                });
-                            }  
-                        });*/
-
         });
 
         this.on("camera-stop", (event) => {
