@@ -23,7 +23,7 @@ const sessionPresetNames = [
 ];
 
 /** Class representing a raw interleaved RGB image */
- class PLRgbImage {
+class PLRgbImage {
     /**
      * create a PLRgbImage
      * @param  {ArrayBuffer} arrayBuffer contains interleaved RGB raw data
@@ -243,203 +243,224 @@ function getPLRgbImageFromResponse(response) {
  * If this works it can be copy to nativebridge.js
  * **/
 
+
 export default class WKScanController extends ContainerController {
     constructor(element, history) {
         super(element, history);
-        
         this.setModel({ data: '', hasCode: false, hasError: false, nativeSupport: false, useScandit: false });
         this.model.wkTempMessage = "WKScanController construtor 1";
-        
-        var renderer, camera, scene, canvasgl;
-        var material;
-        var previewWidth = 360;
-        var previewHeight = Math.round(previewWidth * 16 / 9); // assume 16:9 portrait at start
-        var targetPreviewFPS = 25;
-        var fpsMeasurementInterval = 5;
-        var previewFramesCounter = 0;
-        var previewFramesElapsedSum = 0;
-        var previewFramesMeasuredFPS = 0;
-        var targetRawFPS = 10;
-        var rawCrop_x = undefined;
-        var rawCrop_y = undefined;
-        var rawCrop_w = undefined;
-        var rawCrop_h = undefined;
-        var rawFramesCounter = 0;
-        var rawFramesElapsedSum = 0;
-        var rawFramesMeasuredFPS = 0;
-        var elapsed = 0
-        var controls;
+
+        if (window != undefined) {
+            window.model = this.model;
+            //window.onNativeCameraInitialized = this.onNativeCameraInitialized;
+            //window.onPictureTaken = this.onPictureTaken;
+        } else {
+            console.log("window is undefined");
+        }
+
+        this.model.renderer = undefined;
+        this.model.camera = undefined;
+        this.model.scene = undefined;
+        this.model.canvasgl = undefined;
+        this.model.material = undefined;
+        this.model.previewWidth = 360;
+        this.model.previewHeight = Math.round(this.model.previewWidth * 16 / 9); // assume 16:9 portrait at start
+        this.model.targetPreviewFPS = 25;
+        this.model.fpsMeasurementInterval = 5;
+        this.model.previewFramesCounter = 0;
+        this.model.previewFramesElapsedSum = 0;
+        this.model.previewFramesMeasuredFPS = 0;
+        this.model.targetRawFPS = 10;
+        this.model.rawCrop_x = undefined;
+        this.model.rawCrop_y = undefined;
+        this.model.rawCrop_w = undefined;
+        this.model.rawCrop_h = undefined;
+        this.model.rawFramesCounter = 0;
+        this.model.rawFramesElapsedSum = 0;
+        this.model.rawFramesMeasuredFPS = 0;
+        this.model.elapsed = 0
+        this.model.controls;
+        this.model.formatTexture = THREE.RGBFormat;
+
         const bytePerChannel = 3;
         if (bytePerChannel === 4) {
-            formatTexture = THREE.RGBAFormat;
+            this.model.formatTexture = THREE.RGBAFormat;
         } else if (bytePerChannel === 3) {
-            formatTexture = THREE.RGBFormat;
+            this.model.formatTexture = THREE.RGBFormat;
         }
-        var formatTexture;
-        var flashMode = 'off'
-        var usingMJPEG = false
+
+        this.model.flashMode = 'off'
+        this.model.usingMJPEG = false
+
+
 
         this.model.wkTempMessage = "WKScanController construtor 2";
 
-        document.addEventListener("DOMContentLoaded", () => {
-            status_test = document.getElementById('status_test');
-            status_fps_preview = document.getElementById('status_fps_preview');
-            status_fps_raw = document.getElementById('status_fps_raw');
-        
-            startCameraButtonGL = document.getElementById('startCameraButtonGL');
-            startCameraButtonMJPEG = document.getElementById('startCameraButtonMJPEG');
-            stopCameraButton = document.getElementById('stopCameraButton');
-            stopCameraButton.disabled = true
-        
-            title_h2 = document.getElementById('title_id');
-            takePictureButton1 = document.getElementById('takePictureButton1');
-            takePictureButton2 = document.getElementById('takePictureButton2');
-            flashButton = document.getElementById('flashButton');
-            snapshotImage = document.getElementById('snapshotImage');
-        
-            
-            canvasgl = document.getElementById('cameraCanvas');
-            streamPreview = document.getElementById('streamPreview');
-            rawCropCanvas = document.getElementById('rawCropCanvas');
-            invertRawFrameCheck = document.getElementById('invertRawFrameCheck');
-            cropRawFrameCheck = document.getElementById('cropRawFrameCheck');
-            rawCropRoiInput = document.getElementById('rawCropRoiInput');
-            rawCropRoiInput.addEventListener('change', function() {
-                setCropCoords();
-            })
-            cropRawFrameCheck.addEventListener('change', function() {
-                if (this.checked) {
-                    show(rawCropRoiInput);        
-                } else {
-                    hide(rawCropRoiInput);
-                }
-            });
-            hide(rawCropRoiInput);
-            hide(rawCropCanvas);
-        
-        
-            select_preset = document.getElementById('select_preset');
-            let i = 0
-            for (presetName of sessionPresetNames) {
-                var p_i = new Option(presetName, presetName)
-                select_preset.options.add(p_i);
-                i++;
-            }
-            for (let i = 0; i < select_preset.options.length; i++) {
-                if (select_preset.options[i].value === 'hd1920x1080') {
-                    select_preset.selectedIndex = i;
-                    break;
-                }
-            }
-            selectedPresetName = select_preset.options[select_preset.selectedIndex].value;
-            status_test.innerHTML = selectedPresetName;
-        
-            startCameraButtonGL.addEventListener('click', function(e) {
-                usingMJPEG = false
-                select_preset.disabled = true;
-                startCameraButtonGL.disabled = true
-                startCameraButtonMJPEG.disabled = true
-                stopCameraButton.disabled = false
-                setCropCoords();
-                show(canvasgl);
-                canvasgl.parentElement.style.display = "block";
-                hide(streamPreview);
-                streamPreview.parentElement.style.display = "none";
-                show(status_fps_preview);
-                show(status_fps_raw);
-                setupGLView(previewWidth, previewHeight);
-                startNativeCamera(
-                    selectedPresetName, 
-                    flashMode, 
-                    onFramePreview, 
-                    targetPreviewFPS, 
-                    previewWidth, 
-                    onFrameGrabbed, 
-                    targetRawFPS, 
-                    true,
-                    () => {
-                        title_h2.innerHTML = _serverUrl;
-                    },
-                    rawCrop_x,
-                    rawCrop_y,
-                    rawCrop_w,
-                    rawCrop_h);
-            })
-            startCameraButtonMJPEG.addEventListener('click', function(e) {
-                usingMJPEG = true
-                select_preset.disabled = true;
-                startCameraButtonGL.disabled = true
-                startCameraButtonMJPEG.disabled = true
-                stopCameraButton.disabled = false
-                setCropCoords();
-                hide(canvasgl);
-                canvasgl.parentElement.style.display = "none";
-                show(streamPreview);
-                streamPreview.parentElement.style.display = "block";
-                hide(status_fps_preview);
-                show(status_fps_raw);
-                startNativeCamera(
-                    selectedPresetName, 
-                    flashMode, 
-                    undefined, 
-                    targetPreviewFPS, 
-                    previewWidth, 
-                    onFrameGrabbed, 
-                    targetRawFPS,
-                    true, 
-                    () => {
-                        streamPreview.src = `${_serverUrl}/mjpeg`;
-                        title_h2.innerHTML = _serverUrl;
-                    },
-                    rawCrop_x,
-                    rawCrop_y,
-                    rawCrop_w,
-                    rawCrop_h);
-            });
-            stopCameraButton.addEventListener('click', function(e) {
-                window.close(); 
-                stopNativeCamera();
-                select_preset.disabled = false;
-                startCameraButtonGL.disabled = false
-                startCameraButtonMJPEG.disabled = false
-                stopCameraButton.disabled = true
-                time0 = undefined
-                globalCounter = 0
-                title_h2.innerHTML = "Camera Test"
-            });
-        
-            takePictureButton1.addEventListener('click', function(e) {
-                takePictureBase64NativeCamera(onPictureTaken)
-            });
-            takePictureButton2.addEventListener('click', function(e) {
-                getSnapshot().then( b => {
-                    snapshotImage.src = URL.createObjectURL(b);
-                });
-            });
-        
-            flashButton.addEventListener('click', function(e) {
-                switch (flashMode) {
-                    case 'off':
-                        flashMode = 'flash';
-                        break;
-                    case 'flash':
-                        flashMode = 'torch';
-                        break;
-                    case 'torch':
-                        flashMode = 'off';
-                        break;
-                    default:
-                        break;
-                }
-                flashButton.innerHTML = `T ${flashMode}`;
-                setFlashModeNativeCamera(flashMode);
-            });
-        
-            hide(canvasgl);
-            hide(streamPreview);
-            hide(status_fps_preview)
-            hide(status_fps_raw)
+        //document.addEventListener("DOMContentLoaded", () => {
+
+
+        this.model.status_test = this.element.querySelector('#status_test');
+        this.model.status_fps_preview = this.element.querySelector('#status_fps_preview');
+        this.model.status_fps_raw = this.element.querySelector('#status_fps_raw');
+
+        this.model.startCameraButtonGL = this.element.querySelector('#startCameraButtonGL');
+        this.model.startCameraButtonMJPEG = this.element.querySelector('#startCameraButtonMJPEG');
+        this.model.stopCameraButton = this.element.querySelector('#stopCameraButton');
+        this.model.stopCameraButton.disabled = true
+
+        this.model.title_h2 = this.element.querySelector('#title_id');
+        this.model.takePictureButton1 = this.element.querySelector('#takePictureButton1');
+        this.model.takePictureButton2 = this.element.querySelector('#takePictureButton2');
+        this.model.flashButton = this.element.querySelector('#flashButton');
+        this.model.snapshotImage = this.element.querySelector('#snapshotImage');
+
+
+        this.model.canvasgl = this.element.querySelector('#cameraCanvas');
+        this.model.streamPreview = this.element.querySelector('#streamPreview');
+        this.model.rawCropCanvas = this.element.querySelector('#rawCropCanvas');
+        this.model.invertRawFrameCheck = this.element.querySelector('#invertRawFrameCheck');
+        this.model.cropRawFrameCheck = this.element.querySelector('#cropRawFrameCheck');
+        this.model.rawCropRoiInput = this.element.querySelector('#rawCropRoiInput');
+        this.model.rawCropRoiInput.onChange("change", () =>{
+            setCropCoords();
         });
+
+         
+        
+
+        this.model.cropRawFrameCheck.addEventListener("change",  () =>{
+            if (this.checked) {
+                show(this.model.rawCropRoiInput);
+            } else {
+                hide(this.model.rawCropRoiInput);
+            }
+        });
+        hide(this.model.rawCropRoiInput);
+        hide(this.model.rawCropCanvas);
+
+
+        this.model.select_preset = this.element.querySelector('#select_preset');
+        let i = 0
+        for (presetName of sessionPresetNames) {
+            var p_i = new Option(presetName, presetName)
+            this.model.select_preset.options.add(p_i);
+            i++;
+        }
+        for (let i = 0; i < this.model.select_preset.options.length; i++) {
+            if (this.model.select_preset.options[i].value === 'hd1920x1080') {
+                this.model.select_preset.selectedIndex = i;
+                break;
+            }
+        }
+        this.model.selectedPresetName = this.model.select_preset.options[this.model.select_preset.selectedIndex].value;
+        this.model.status_test.innerHTML = this.model.selectedPresetName;
+
+        this.model.startCameraButtonGL.addEventListener('click',  () =>{
+            this.model.usingMJPEG = false
+            this.model.select_preset.disabled = true;
+            this.model.startCameraButtonGL.disabled = true
+            this.model.startCameraButtonMJPEG.disabled = true
+            this.model.stopCameraButton.disabled = false
+            setCropCoords();
+            show(this.model.canvasgl);
+            this.model.canvasgl.parentElement.style.display = "block";
+            hide(this.model.streamPreview);
+            this.model.streamPreview.parentElement.style.display = "none";
+            show(this.model.status_fps_preview);
+            show(this.model.status_fps_raw);
+            setupGLView(this.model.previewWidth, this.model.previewHeight);
+            startNativeCamera(
+                this.model.selectedPresetName,
+                this.model.flashMode,
+                this.model.onFramePreview,
+                this.model.targetPreviewFPS,
+                this.model.previewWidth,
+                onFrameGrabbed,
+                onFrameGrabbedtargetRawFPS,
+                true,
+                () => {
+                    this.model.title_h2.innerHTML = _serverUrl;
+                },
+                this.model.rawCrop_x,
+                this.model.rawCrop_y,
+                this.model.rawCrop_w,
+                this.model.rawCrop_h);
+        })
+        this.model.startCameraButtonMJPEG.addEventListener('click',  () =>{
+            this.model.usingMJPEG = true
+            this.model.select_preset.disabled = true;
+            this.model.startCameraButtonGL.disabled = true
+            this.model.startCameraButtonMJPEG.disabled = true
+            this.model.stopCameraButton.disabled = false
+            setCropCoords();
+            hide(this.model.canvasgl);
+            this.model.canvasgl.parentElement.style.display = "none";
+            show(this.model.streamPreview);
+            this.model.streamPreview.parentElement.style.display = "block";
+            hide(this.model.status_fps_preview);
+            show(this.model.status_fps_raw);
+            startNativeCamera(
+                this.model.selectedPresetName,
+                this.model.flashMode,
+                undefined,
+                this.model.targetPreviewFPS,
+                this.model.previewWidth,
+                this.model.onFrameGrabbed,
+                this.model.targetRawFPS,
+                true,
+                () => {
+                    this.model.streamPreview.src = `${_serverUrl}/mjpeg`;
+                    this.model.title_h2.innerHTML = _serverUrl;
+                },
+                this.model.rawCrop_x,
+                this.model.rawCrop_y,
+                this.model.rawCrop_w,
+                this.model.rawCrop_h);
+        });
+        this.model.stopCameraButton.addEventListener('click',  () =>{
+            window.close();
+            stopNativeCamera();
+            this.model.select_preset.disabled = false;
+            this.model.startCameraButtonGL.disabled = false
+            this.model.startCameraButtonMJPEG.disabled = false
+            this.model.stopCameraButton.disabled = true
+            time0 = undefined
+            this.model.globalCounter = 0
+            this.model.title_h2.innerHTML = "Camera Test"
+        });
+
+        this.model.takePictureButton1.addEventListener('click',  () =>{
+            takePictureBase64NativeCamera(onPictureTaken)
+        });
+        this.model.takePictureButton2.addEventListener('click',  () =>{
+            getSnapshot().then(b => {
+                this.model.snapshotImage.src = URL.createObjectURL(b);
+            });
+        });
+
+        this.model.flashButton.addEventListener('click',  () =>{
+            switch (flashMode) {
+                case 'off':
+                    flashMode = 'flash';
+                    break;
+                case 'flash':
+                    flashMode = 'torch';
+                    break;
+                case 'torch':
+                    flashMode = 'off';
+                    break;
+                default:
+                    break;
+            }
+            this.model.flashButton.innerHTML = `T ${flashMode}`;
+            setFlashModeNativeCamera(flashMode);
+        });
+
+        hide(this.model.canvasgl);
+        hide(this.model.streamPreview);
+        hide(this.model.status_fps_preview)
+        hide(this.model.status_fps_raw)
+        //});
 
         this.model.wkTempMessage = "WKScanController construtor 3";
     }
