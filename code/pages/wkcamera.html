@@ -1,39 +1,95 @@
 <psk-example class="mobile-example" opened>
     <style>
-        .cameraImg{
+        .cameraImg {
             width: 100vw !important;
-            height: auto;
-            max-height: 40vh;
-            min-height: 100px;
+            height: 30vh;
         }
-        .fullwidth{
+
+        .fullwidth {
             width: 100vw !important;
             min-height: 40px;
         }
-    </style> 
-    <psk-mobile disable-sidebar enable-back class="noPadding" >
-        <psk-container controller-name="WKScanController" >
-            <psk-label class="fullwidth" label="SM1-004" ></psk-label>
-            <psk-label class="fullwidth" label="@wkTempMessage" ></psk-label>
-            <psk-label class="fullwidth" label="@status_fps_preview" ></psk-label>
-            
-            <psk-select view-model="@cameraResolution">
-            </psk-select>
-            
-            <psk-button label="Start" event-name="camera-start"></psk-button>
-            <psk-button label="Stop" event-name="camera-stop"></psk-button>
-            <psk-button label="Picture" event-name="camera-picture"></psk-button>
-            <psk-button label="Flash" event-name="camera-flash"></psk-button>
-            <psk-img class="cameraImg"  src="@wkCameraImage"></psk-img>
-            <canvas id='cameraCanvas'></canvas>   
-            <psk-condition condition="@nativeSupport">
-                <div slot="condition-true">
-                    In a few seconds a native API will pop on you screen and guide you.
+
+        .divItem {
+            min-height: 50px;
+            min-width: 50px;
+        }
+    </style>
+    <psk-mobile disable-sidebar enable-back class="noPadding">
+        <psk-container controller-name="WKScanController">
+            <psk-label class="fullwidth" label="SM 02-08-2021- 001 - Only for iOS devices."></psk-label>
+            <psk-label class="fullwidth" label="@wkTempMessage"></psk-label>
+
+            <div class="container-fluid">
+                <div class="row">
+                    <div class="col-">
+                        <select class="form-control form-control-sm" id="select_preset" onchange="ChangePresetList()">
+                        </select>
+                    </div>
+                    <div class="col">
+                        <button type="button" class="btn btn-primary btn-sm" id="flashButton">F off</button>
+                    </div>
+                    <div class="col">
+                        <button type="button" class="btn btn-danger btn-sm" id='stopCameraButton'>Stop</button><br />
+                    </div>
                 </div>
-                <div slot="condition-false">
-                    Only for iOS devices.
+                <div class="row top-buffer">
+                    <div class="col">
+                        <button type="button" class="btn btn-primary btn-sm" id='startCameraButtonGL'>Start(GL)</button>
+                    </div>
+                    <div class="col">
+                        <button type="button" class="btn btn-primary btn-sm"
+                            id='startCameraButtonMJPEG'>Start(MJPEG)</button>
+                    </div>
                 </div>
-            </psk-condition>
+                <div class="row top-buffer">
+                    <div class="col">
+                        <button type="button" class="btn btn-primary btn-sm" id="takePictureButton1">Picture
+                            (base64)</button>
+                    </div>
+                    <div class="col">
+                        <button type="button" class="btn btn-primary btn-sm" id="takePictureButton2">Picture
+                            (bytes)</button>
+                    </div>
+                </div>
+                <div class="row top-buffer">
+                    <input class="col form-control" type="text" id="rawCropRoiInput"
+                        placeholder="enter roi as x,y,w,h" />
+                </div>
+                <div class="row">
+                    <div class="col custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="cropRawFrameCheck" />
+                        <label class="custom-control-label" for="cropRawFrameCheck">Crop</label>
+                    </div>
+                    <div class="col custom-control custom-switch">
+                        <input class="custom-control-input" type="checkbox" id="invertRawFrameCheck" checked />
+                        <label class="custom-control-label" for="invertRawFrameCheck">Invert</label>
+                    </div>
+                </div>
+                <div class="row top-buffer">
+                    <div class="col">
+                        <canvas id='cameraCanvas'></canvas>
+                    </div>
+                    <div class="col">
+                        <img id='streamPreview' />
+                    </div>
+                    <div class="col">
+                        <canvas id='rawCropCanvas'></canvas>
+                    </div>
+                </div>
+                <div class="row">
+                    <p id='status_test'></p>
+                </div>
+                <div class="row">
+                    <p id='status_fps_preview'></p>
+                </div>
+                <div class="row">
+                    <p id='status_fps_raw'></p>
+                </div>
+            </div>
+            <div>
+                <img id='snapshotImage' />
+            </div> 
         </psk-container>
     </psk-mobile>
     </div>
