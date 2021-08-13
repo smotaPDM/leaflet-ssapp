@@ -211,7 +211,7 @@ export default class WKScanController extends ContainerController {
             this.show(this.cameraProps.canvasgl);
             this.cameraProps.canvasgl.parentElement.style.display = "block";
             this.hide(this.cameraProps.streamPreview);
-            this.cameraProps.streamPreview.parentElement.style.display = "none";
+            //this.cameraProps.streamPreview.parentElement.style.display = "none";
             this.show(this.cameraProps.status_fps_preview);
             this.show(this.cameraProps.status_fps_raw);
             this.setupGLView(this.cameraProps.previewWidth, this.cameraProps.previewHeight);
@@ -244,7 +244,7 @@ export default class WKScanController extends ContainerController {
             this.cameraProps.stopCameraButton.disabled = false
             this.setCropCoords();
             this.hide(this.cameraProps.canvasgl);
-            this.cameraProps.canvasgl.parentElement.style.display = "none";
+            //this.cameraProps.canvasgl.parentElement.style.display = "none";
             this.show(this.cameraProps.streamPreview);
             this.cameraProps.streamPreview.parentElement.style.display = "block";
             this.hide(this.cameraProps.status_fps_preview);
@@ -269,7 +269,7 @@ export default class WKScanController extends ContainerController {
         });
         this.cameraProps.stopCameraButton.addEventListener('click', () => {
             window.close();
-            stopNativeCamera();
+            this.stopNativeCamera();
             this.cameraProps.select_preset.disabled = false;
             this.cameraProps.startCameraButtonGL.disabled = false
             this.cameraProps.startCameraButtonMJPEG.disabled = false
@@ -318,6 +318,7 @@ export default class WKScanController extends ContainerController {
 
 
     setupGLView(w, h) {
+        this.model.wkTempMessage = "WKScanController setupGLView";
         this.cameraProps.scene = new THREE.Scene();
 
         this.cameraProps.camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 10000);
@@ -394,6 +395,7 @@ export default class WKScanController extends ContainerController {
      * @param {number} elapsedTime time in ms elapsed to get the preview frame
      */
     onFramePreview(rgbImage, elapsedTime) {
+        this.model.wkTempMessage = "397_onFramePreview";
         var frame = new Uint8Array(rgbImage.arrayBuffer);
         if (rgbImage.width !== this.cameraProps.previewWidth || rgbImage.height !== this.cameraProps.previewHeight) {
             this.cameraProps.previewWidth = rgbImage.width;
@@ -502,7 +504,7 @@ export default class WKScanController extends ContainerController {
         var _previewWidth = previewWidth
         var _onFramePreviewCallback = "onFramePreviewCallback";
         var _onFrameGrabbedCallBack = "onFrameGrabbedCallBack";
-        var _onCameraInitializedCallBack = "onCameraInitializedCallBack";
+        var _onCameraInitializedCallBack = undefined;
         var _targetGrabFps = targetGrabFps
         setRawCropRoi(x, y, w, h);
         let params = {
@@ -561,19 +563,25 @@ export default class WKScanController extends ContainerController {
         this.model.wkTempMessage = "onNativeCameraInitialized" + wsPort;
 
         _serverUrl = `http://localhost:${wsPort}`;
-        this.model.wkTempMessage =_serverUrl;
+        //this.model.wkTempMessage =_serverUrl;
+        this.model.wkTempMessage = "onNativeCameraInitialized_"+_serverUrl;
         //if (onFramePreviewCallback !== undefined) 
         {
             _previewHandle = setInterval(() => {
+               // this.model.wkTempMessage = "onNativeCameraInitialized__1";
                 let t0 = performance.now();
                 this.getPreviewFrame().then(image => {
+                    //this.model.wkTempMessage = "onNativeCameraInitialized__2";
                     if (image instanceof PLRgbImage) {
+                        this.model.wkTempMessage = "onNativeCameraInitialized__3";
                         this.onFramePreview(image, performance.now() - t0)
+                        //this.model.wkTempMessage = "onNativeCameraInitialized__previewHandles";
                     }
                 });
             }, 1000 / _targetPreviewFps);
         }
         //if (_onFrameGrabbedCallBack !== undefined) 
+        /*this.model.wkTempMessage = "onNativeCameraInitialized_2";
         {
             _grabHandle = setInterval(() => {
                 let t0 = performance.now();
@@ -584,26 +592,31 @@ export default class WKScanController extends ContainerController {
                 })
             }, 1000 / _targetGrabFps)
         }
-        //if (_onCameraInitializedCallBack !== undefined) 
+        this.model.wkTempMessage = "onNativeCameraInitialized_3";
+        /*if (_onCameraInitializedCallBack !== undefined) 
         {
             setTimeout(() => {
-                this.onCameraInitializedCallBack();
-                //_onCameraInitializedCallBack();
+                 _onCameraInitializedCallBack();
             }, 500);
-        }
+        }*/
+        this.model.wkTempMessage = "onNativeCameraInitialized_finish";
     }
 
     /**
      * @returns  {Promise<PLRgbImage>} gets a downsampled RGB frame for preview
      */
     getPreviewFrame() {
+        //this.model.wkTempMessage = "getPreviewFrame()";
+
         return fetch(`${_serverUrl}/previewframe`)
             .then(response => {
+                this.model.wkTempMessage = "getPreviewFrame()-response";
                 let image = this.getPLRgbImageFromResponse(response);
                 return image;
             })
             .catch(error => {
                 console.log(error);
+                this.model.wkTempMessage = "getPreviewFrame()-error"+error;
             })
     }
 
@@ -651,6 +664,7 @@ export default class WKScanController extends ContainerController {
      * @returns {Promise<PLRgbImage>} the image in a promise
      */
     getPLRgbImageFromResponse(response) {
+        this.model.wkTempMessage = "getPLRgbImageFromResponse()";
         let frame_w = 0
         let frame_h = 0
         if (response.headers.has("image-width")) {
