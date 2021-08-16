@@ -51,10 +51,8 @@ export default class WKScanController extends ContainerController {
         super(element, history);
         this.setModel({ data: '', hasCode: false, hasError: false, nativeSupport: false, useScandit: false });
         this.model.wkTempMessage = "WKScanController construtor 1";
+        this.model.wkTempMessage2 ="";
 
-
-
-     
 
         if (window != undefined) {
             window.model = this.model;
@@ -66,6 +64,7 @@ export default class WKScanController extends ContainerController {
             window.getPLRgbImageFromResponse = this.getPLRgbImageFromResponse;
             window.onFrameGrabbed= this.onFrameGrabbed;
             window.onFramePreview = this.onFramePreview; 
+            window.onCameraInitializedCallBack = this.onCameraInitializedCallBack;
         } else {
             console.log("window is undefined");
         }
@@ -197,7 +196,7 @@ export default class WKScanController extends ContainerController {
             this.show(this.cameraProps.canvasgl);
             this.cameraProps.canvasgl.parentElement.style.display = "block";
             this.hide(this.cameraProps.streamPreview);
-            //this.cameraProps.streamPreview.parentElement.style.display = "none";
+            this.cameraProps.streamPreview.parentElement.style.display = "none";
             this.show(this.cameraProps.status_fps_preview);
             this.show(this.cameraProps.status_fps_raw);
             this.setupGLView(this.cameraProps.previewWidth, this.cameraProps.previewHeight);
@@ -229,7 +228,7 @@ export default class WKScanController extends ContainerController {
             this.cameraProps.stopCameraButton.disabled = false
             this.setCropCoords();
             this.hide(this.cameraProps.canvasgl);
-            //this.cameraProps.canvasgl.parentElement.style.display = "none";
+            this.cameraProps.canvasgl.parentElement.style.display = "none";
             this.show(this.cameraProps.streamPreview);
             this.cameraProps.streamPreview.parentElement.style.display = "block";
             this.hide(this.cameraProps.status_fps_preview);
@@ -299,28 +298,30 @@ export default class WKScanController extends ContainerController {
 
 
     onCameraInitializedCallBack() {
+        this.model.wkTempMessage2 += "streamPreview.src"+this.cameraProps.streamPreview.src;
         this.cameraProps.streamPreview.src = `${this.cameraProps.serverUrl}/mjpeg`;
-        this.model.wkTempMessage = "streamPreview.src"+this.cameraProps.streamPreview.src;
+        
     }
 
     setupGLView(w, h) {
-        this.model.wkTempMessage = "WKScanController setupGLView";
-        this.cameraProps.scene = new THREE.Scene();
+        this.model.wkTempMessage2 = `setupGLView w= ${w} h= ${h}`;
+        this.cameraProps.scene = new THREE.Scene(); 
 
         this.cameraProps.camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 10000);
-
+        this.model.wkTempMessage2 +="_1";
         this.cameraProps.renderer = new THREE.WebGLRenderer({ canvas: this.cameraProps.canvasgl, antialias: true });
 
         let cameraHeight = h / 2 / Math.tan(this.cameraProps.camera.fov / 2 * (Math.PI / 180));
         this.cameraProps.camera.position.set(0, 0, cameraHeight);
         let clientHeight = Math.round(h / w * this.cameraProps.canvasgl.clientWidth);
         this.cameraProps.renderer.setSize(this.cameraProps.canvasgl.clientWidth, clientHeight);
+        this.model.wkTempMessage2 += `clientHeight= ${clientHeight}  clientWidth= ${this.cameraProps.canvasgl.clientWidth}`;
 
         this.cameraProps.controls = new THREE.OrbitControls(this.cameraProps.camera, this.cameraProps.renderer.domElement);
         this.cameraProps.controls.enablePan = false;
         this.cameraProps.controls.enableZoom = false;
         this.cameraProps.controls.enableRotate = false;
-
+        this.model.wkTempMessage2 +="_3";
         const dataTexture = new Uint8Array(w * h * this.cameraProps.bytePerChannel);
         for (let i = 0; i < w * h * this.cameraProps.bytePerChannel; i++)
             dataTexture[i] = 255;
@@ -330,11 +331,13 @@ export default class WKScanController extends ContainerController {
         this.cameraProps.material = new THREE.MeshBasicMaterial({
             map: frameTexture,
         });
+        this.model.wkTempMessage2 +="_4";
         this.cameraProps.material.map.flipY = true;
         const plane = new THREE.Mesh(planeGeo, this.cameraProps.material);
         this.cameraProps.scene.add(plane);
-
+        this.model.wkTempMessage2 +="_5";
         this.animate();
+        this.model.wkTempMessage2 +="_6";
     }
 
 
@@ -357,8 +360,10 @@ export default class WKScanController extends ContainerController {
 
 
     animate() {
+        //this.model.wkTempMessage2 += "animate";
         window.requestAnimationFrame(() => this.animate());
         this.cameraProps.renderer.render(this.cameraProps.scene, this.cameraProps.camera);
+        //this.model.wkTempMessage2 += "_X";
     }
 
     ChangePresetList() {
@@ -408,13 +413,13 @@ export default class WKScanController extends ContainerController {
         this.model.wkTempMessage += "_cW" + this.cameraProps.previewWidth;
         this.model.wkTempMessage += "_cH" + this.cameraProps.previewHeight;
 
-        if (rgbImage.width !== this.cameraProps.previewWidth || rgbImage.height !== this.cameraProps.previewHeight) {
+        if (rgbImage.width !== this.cameraProps.previewWidth || rgbImage.height !== this.cameraProps.previewHeight) 
+        {
             this.model.wkTempMessage += "_rif_";
-            //this.cameraProps.previewWidth = rgbImage.width;
-            //this.cameraProps.previewHeight = rgbImage.height;
+            this.cameraProps.previewWidth = rgbImage.width;
+            this.cameraProps.previewHeight = rgbImage.height;
             this.setupGLView(this.cameraProps.previewWidth, this.cameraProps.previewHeight);
-        }
-        //this.model.wkTempMessage += "397_onFramePreview_2";
+        } 
         this.cameraProps.material.map = new THREE.DataTexture(frame, rgbImage.width, rgbImage.height, this.cameraProps.formatTexture, THREE.UnsignedByteType);
         this.cameraProps.material.map.flipY = true;
         this.cameraProps.material.needsUpdate = true;
@@ -578,7 +583,7 @@ export default class WKScanController extends ContainerController {
 
         this.cameraProps.serverUrl = `http://localhost:${wsPort}`; 
         this.model.wkTempMessage = "onNativeCameraInitialized_"+this.cameraProps.serverUrl;
-        //if (onFramePreviewCallback !== undefined) 
+        if (this.cameraProps.onFramePreviewCallback !== undefined) 
         {
             this.cameraProps.previewHandle = setInterval(() => {
                // this.model.wkTempMessage = "onNativeCameraInitialized__1";
@@ -593,25 +598,28 @@ export default class WKScanController extends ContainerController {
                 });
             }, 1000 / this.cameraProps.targetPreviewFps);
         }
-        //if (_onFrameGrabbedCallBack !== undefined) 
-        /*this.model.wkTempMessage = "onNativeCameraInitialized_2";
+        if (this.cameraProps.onFrameGrabbedCallBack !== undefined) 
         {
-            grabHandle = setInterval(() => {
+            this.model.wkTempMessage2 = "onFrameGrabbedCallBack";
+            this.cameraProps.grabHandle = setInterval(() => {
                 let t0 = performance.now();
+
                 this.getRawFrame(_x, _y, _w, _h).then(image => {
                     if (image instanceof PLRgbImage) {
                         this.onFrameGrabbed(image, performance.now() - t0);
                     }
                 })
-            }, 1000 / _targetGrabFps)
+            }, 1000 / this.cameraProps.targetGrabFps)
         }
+
         this.model.wkTempMessage = "onNativeCameraInitialized_3";
-        /*if (_onCameraInitializedCallBack !== undefined) 
+        if (this.cameraProps.onCameraInitializedCallBack !== undefined) 
         {
+            this.model.wkTempMessage2 = "onCameraInitializedCallBack";
             setTimeout(() => {
-                 _onCameraInitializedCallBack();
+                this.onCameraInitializedCallBack();
             }, 500);
-        }*/
+        }
         this.model.wkTempMessage = "onNativeCameraInitialized_finish";
     }
 
@@ -619,17 +627,17 @@ export default class WKScanController extends ContainerController {
      * @returns  {Promise<PLRgbImage>} gets a downsampled RGB frame for preview
      */
     getPreviewFrame() {
-        //this.model.wkTempMessage = "getPreviewFrame()";
+        this.model.wkTempMessage2 = "getPreviewFrame()";
 
         return fetch(`${this.cameraProps.serverUrl}/previewframe`)
             .then(response => {
-                this.model.wkTempMessage = "getPreviewFrame()-response";
+                this.model.wkTempMessage2 = "getPreviewFrame()-response";
                 let image = this.getPLRgbImageFromResponse(response);
                 return image;
             })
             .catch(error => {
                 console.log(error);
-                this.model.wkTempMessage = "getPreviewFrame()-error"+error;
+                this.model.wkTempMessage2 = "getPreviewFrame()-error"+error;
             })
     }
 
@@ -677,7 +685,7 @@ export default class WKScanController extends ContainerController {
      * @returns {Promise<PLRgbImage>} the image in a promise
      */
     getPLRgbImageFromResponse(response) {
-        this.model.wkTempMessage = "getPLRgbImageFromResponse()";
+        this.model.wkTempMessage3 = "getPLRgbImageFromResponse()";
         let frame_w = 0
         let frame_h = 0
         if (response.headers.has("image-width")) {
@@ -686,6 +694,12 @@ export default class WKScanController extends ContainerController {
         if (response.headers.has("image-height")) {
             frame_h = parseInt(response.headers.get("image-height"));
         }
+        this.model.wkTempMessage3 = `getPLRgb headers-${response.headers.values.toString()}`;
+        
+        //this.model.wkTempMessage3 = `getPLRgb w-${frame_w} h-${frame_h}`;
+
+        frame_w = 360;
+        frame_h = 240;
         return response.blob().then(b => {
             return b.arrayBuffer().then(a => {
                 let image = new PLRgbImage(a, frame_w, frame_h);
