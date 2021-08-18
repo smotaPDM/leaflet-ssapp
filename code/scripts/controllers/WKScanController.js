@@ -195,11 +195,13 @@ export default class WKScanController extends ContainerController {
 
         this.cameraProps.invertRawFrameCheck = this.element.querySelector('#invertRawFrameCheck');
         this.cameraProps.cropRawFrameCheck = this.element.querySelector('#cropRawFrameCheck');
+        
         this.cameraProps.cropRawFrameCheck.enabled = true;
 
         this.cameraProps.cropRawFrameCheck.addEventListener('click', (e) => {
             this.cameraProps.cropRawFrameCheck.checked = !this.cameraProps.cropRawFrameCheck.checked;
         });
+        this.cameraProps.ycbcrCheck = this.element.querySelector('#ycbcrCheck');
         this.cameraProps.rawCropRoiInput = this.element.querySelector('#rawCropRoiInput');
         this.cameraProps.rawCropRoiInput.addEventListener("change", () => {
             this.setCropCoords();
@@ -268,14 +270,18 @@ export default class WKScanController extends ContainerController {
                 this.cameraProps.rawCrop_x,
                 this.cameraProps.rawCrop_y,
                 this.cameraProps.rawCrop_w,
-                this.cameraProps.rawCrop_h);
+                this.cameraProps.rawCrop_h,
+                this.cameraProps.ycbcrCheck.checked);
         });
         this.cameraProps.startCameraButtonMJPEG.addEventListener('click', () => {
             this.cameraProps.usingMJPEG = true
             this.cameraProps.select_preset.disabled = true;
             this.cameraProps.startCameraButtonGL.disabled = true
             this.cameraProps.startCameraButtonMJPEG.disabled = true
+            
             this.cameraProps.stopCameraButton.disabled = false
+            this.cameraProps.torchRange.disabled = false
+            this.cameraProps.ycbcrCheck.disabled = true
             this.setCropCoords();
             this.hide(this.cameraProps.canvasgl);
             this.cameraProps.canvasgl.parentElement.style.display = "none";
@@ -296,7 +302,8 @@ export default class WKScanController extends ContainerController {
                 this.cameraProps.rawCrop_x,
                 this.cameraProps.rawCrop_y,
                 this.cameraProps.rawCrop_w,
-                this.cameraProps.rawCrop_h);
+                this.cameraProps.rawCrop_h,
+                this.cameraProps.ycbcrCheck.checked);
         });
         this.cameraProps.stopCameraButton.addEventListener('click', () => {
             window.close();
@@ -305,6 +312,9 @@ export default class WKScanController extends ContainerController {
             this.cameraProps.startCameraButtonGL.disabled = false
             this.cameraProps.startCameraButtonMJPEG.disabled = false
             this.cameraProps.stopCameraButton.disabled = true
+            this.cameraProps.torchRange.disabled = true
+            this.cameraProps.ycbcrCheck.disabled = false
+            
             time0 = undefined
             this.cameraProps.globalCounter = 0
             //this.cameraProps.title_h2.innerHTML = "Camera Test"
