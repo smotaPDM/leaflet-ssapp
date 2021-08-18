@@ -1,6 +1,8 @@
 import ContainerController from '../../cardinal/controllers/base-controllers/ContainerController.js';
 const gtinResolver = require("gtin-resolver");
 
+
+
 const sessionPresetNames = [
     "low",
     "medium",
@@ -16,12 +18,22 @@ const sessionPresetNames = [
     "photo"
 ];
 
+const deviceTypeNames = [
+    "wideAngleCamera",
+    "tripleCamera",
+    "dualCamera",
+    "dualWideCamera",
+    "ultraWideAngleCamera",
+    "telephotoCamera",
+    "trueDepthCamera"
+]
+
 /** Class representing a raw interleaved RGB image */
 class PLRgbImage {
     /**
      * create a PLRgbImage
      * @param  {ArrayBuffer} arrayBuffer contains interleaved RGB raw data
-     * @param  {Number} width image width 
+     * @param  {Number} width image width
      * @param  {Number} height image height
      */
     constructor(arrayBuffer, width, height) {
@@ -31,6 +43,7 @@ class PLRgbImage {
     }
 };
 
+/**Class representing a raw YCbCr 420 image. First chunck of size wxh is the Y plane. 2nd chunk of size wxh/2 is the interleaved CbCr plane */
 class PLYCbCrImage {
     /** creates a PLYCbCrImage. The Y-plane and CbCr interpleaved plane are copied seperately.
      * @param  {ArrayBuffer} arrayBuffer raw data
@@ -48,6 +61,39 @@ class PLYCbCrImage {
     }
 }
 
+/** Class wrapping a camera configuration */
+class PLCameraConfig {
+
+    /** creates a camera configuration for use with function `startNativeCameraWithConfig`
+     * @param  {string} sessionPreset one of the session presets available in sessionPresetNames
+     * @param  {string} flashConfiguration="auto" can be `torch`, `flash`, or `off`, all other values will be treated as `auto`
+     * @param  {boolean} continuousFocus=true Defines the preferred [AVCaptureDevice.FocusMode](https://developer.apple.com/documentation/avfoundation/avcapturedevice/focusmode). If true, preferred focusmode will be set to **continuousAutoFocus**, otherwise the mode will switch between **autoFocus** and **locked**.
+     * @param  {boolean} autoOrientationEnabled=true If set to true, camera session will attempt to automatically adjust the preview and capture orientation based on the device orientation
+     * @param  {[String]} deviceTypes=["wideAngleCamera"] Additional criteria for selecting the camera. Supported values are **tripleCamera**, **dualCamera**, **dualWideCamera**, **wideAngleCamera**, **ultraWideAngleCamera**, **telephotoCamera** and **trueDepthCamera**. Device discovery session will prioritize device types in the array based on their array index.
+     * @param  {String} cameraPosition="back" "back" or "front". If not defined, this setting will default to "back"
+     * @param  {boolean} highResolutionCaptureEnabled=true If high resolution is enabled, the photo capture will be taken with the highest possible resolution available.
+     * @param  {string | undefined} preferredColorSpace=undefined Possible values are "sRGB", "P3_D65" or "HLG_BT2020".
+     * @param  {number} torchLevel=1.0 Float in the range of 0 to 1.0
+     * @param  {number} aspectRatio=4.0/3.0 This value will not be used
+     */
+    constructor(sessionPreset, flashConfiguration = "auto", continuousFocus = true, autoOrientationEnabled = true, deviceTypes = ["wideAngleCamera"], cameraPosition = "back", highResolutionCaptureEnabled = true, preferredColorSpace = undefined, torchLevel = 1.0, aspectRatio = 4.0 / 3.0) {
+        this.sessionPreset = sessionPreset;
+        this.flashConfiguration = flashConfiguration;
+        this.torchLevel = torchLevel;
+        this.continuousFocus = continuousFocus;
+        this.autoOrientationEnabled = autoOrientationEnabled;
+        this.deviceTypes = deviceTypes;
+        this.cameraPosition = cameraPosition;
+        this.highResolutionCaptureEnabled = highResolutionCaptureEnabled;
+        this.preferredColorSpace = preferredColorSpace;
+        this.aspectRatio = aspectRatio;
+    }
+}
+
+
+
+
+
 export default class WKScanController extends ContainerController {
     constructor(element, history) {
         super(element, history);
@@ -56,7 +102,6 @@ export default class WKScanController extends ContainerController {
             useScandit: false
         });
         if (window != undefined) {
-            window.model = this.model;
             window.onNativeCameraInitialized = this.onNativeCameraInitialized;
             window.onPictureTaken = this.onPictureTaken;
             window.getPreviewFrame = this.getPreviewFrame;
@@ -66,25 +111,9 @@ export default class WKScanController extends ContainerController {
             window.onFrameGrabbed = this.onFrameGrabbed;
             window.onFramePreview = this.onFramePreview;
             window.onCameraInitializedCallBack = this.onCameraInitializedCallBack;
-        } else {
-            console.log("window is undefined");
         }
 
         this.cameraProps = {};
-        this.cameraProps.serverUrl = undefined;
-        this.cameraProps.previewHandle = undefined;
-        this.cameraProps.grabHandle = undefined;
-        this.cameraProps.targetPreviewFps = 20;
-        this.cameraProps.serverUrl = undefined;
-        this.cameraProps.cameraRunning = false;
-        this.cameraProps.targetGrabFps = 10;
-
-
-        this.cameraProps.renderer = undefined;
-        this.cameraProps.camera = undefined;
-        this.cameraProps.scene = undefined;
-        this.cameraProps.canvasgl = undefined;
-        this.cameraProps.material = undefined;
         this.cameraProps.previewWidth = 360;
         this.cameraProps.previewHeight = Math.round(this.cameraProps.previewWidth * 16 / 9); // assume 16:9 portrait at start
         this.cameraProps.targetPreviewFPS = 25;
@@ -93,32 +122,47 @@ export default class WKScanController extends ContainerController {
         this.cameraProps.previewFramesElapsedSum = 0;
         this.cameraProps.previewFramesMeasuredFPS = 0;
         this.cameraProps.targetRawFPS = 10;
-        this.cameraProps._ycbcr = false;
         this.cameraProps.rawCrop_x = undefined;
         this.cameraProps.rawCrop_y = undefined;
         this.cameraProps.rawCrop_w = undefined;
         this.cameraProps.rawCrop_h = undefined;
+        this.cameraProps.rawFramesCounter = 0;
+        this.cameraProps.rawFramesElapsedSum = 0;
+        this.cameraProps.rawFramesMeasuredFPS = 0;
+        this.cameraProps.bytePerChannel = 3;
+        // @ts-ignore
+        if (this.cameraProps.bytePerChannel === 4) {
+            // @ts-ignore
+            this.cameraProps.formatTexture = THREE.RGBAFormat;
+        } else if (this.cameraProps.bytePerChannel === 3) {
+            // @ts-ignore
+            this.cameraProps.formatTexture = THREE.RGBFormat;
+        }
+        this.cameraProps.flashMode = 'off'
+        this.cameraProps.usingMJPEG = false
+
+        this.cameraProps.afOn = true;
+        this.cameraProps.selectedCamera = "back";
+        this.cameraProps.selectedColorspace = undefined;
+
+        //START VARS FROM BRIDGE FILE 
+        this.cameraProps._previewHandle = undefined;
+        this.cameraProps._grabHandle = undefined;
+        this.cameraProps._onFramePreviewCallback = undefined;
+        this.cameraProps._targetPreviewFps = 20;
+        this.cameraProps._previewWidth = 0;
+        this.cameraProps._serverUrl = undefined;
+        this.cameraProps._cameraRunning = false;
+        this.cameraProps._onFrameGrabbedCallBack = undefined;
+        this.cameraProps._onCameraInitializedCallBack = undefined;
+        this.cameraProps._targetGrabFps = 10;
+        this.cameraProps._ycbcr = false;
         this.cameraProps._x = undefined;
         this.cameraProps._y = undefined;
         this.cameraProps._w = undefined;
         this.cameraProps._h = undefined;
+         //END  VARS FROM BRIDGE FILE 
 
-        this.cameraProps.rawFramesCounter = 0;
-        this.cameraProps.rawFramesElapsedSum = 0;
-        this.cameraProps.rawFramesMeasuredFPS = 0;
-        this.cameraProps.elapsed = 0
-        this.cameraProps.controls;
-        this.cameraProps.formatTexture = THREE.RGBFormat;
-
-        const bytePerChannel = 3;
-        if (bytePerChannel === 4) {
-            this.cameraProps.formatTexture = THREE.RGBAFormat;
-        } else if (bytePerChannel === 3) {
-            this.cameraProps.formatTexture = THREE.RGBFormat;
-        }
-
-        this.cameraProps.flashMode = 'off'
-        this.cameraProps.usingMJPEG = false
 
         window.cameraProps = this.cameraProps;
 
@@ -151,9 +195,7 @@ export default class WKScanController extends ContainerController {
 
         this.cameraProps.torchRange.value = "1.0";
         this.cameraProps.torchLevelRangeLabel.innerHTML = `Torch Level: ${this.cameraProps.torchRange.value}`;
-        this.cameraProps.torchRange.disabled = true;
-
-        this.cameraProps.configInfo = this.element.querySelector('#configInfo');
+        this.cameraProps.snapshotImage = this.element.querySelector('#snapshotImage');
         this.cameraProps.getConfigButton = this.element.querySelector('#getConfigButton');
         this.cameraProps.getConfigButton.addEventListener("click", (e) => {
             this.getCameraConfiguration()
@@ -161,10 +203,8 @@ export default class WKScanController extends ContainerController {
                     this.cameraProps.configInfo.innerHTML = JSON.stringify(data);
                 })
         });
-
+        this.cameraProps.configInfo = this.element.querySelector('#configInfo');
         this.cameraProps.colorspaceButton = this.element.querySelector('#colorspaceButton');
-
-
         this.cameraProps.colorspaceButton.addEventListener('click', (e) => {
             let nextColorspace = '';
             switch (this.cameraProps.colorspaceButton.innerHTML) {
@@ -182,10 +222,26 @@ export default class WKScanController extends ContainerController {
             this.setPreferredColorSpaceNativeCamera(nextColorspace);
         });
 
-
-
-        this.cameraProps.snapshotImage = this.element.querySelector('#snapshotImage');
-
+        this.cameraProps.continuousAFButton = this.element.querySelector("#continuousAFButton");
+        this.cameraProps.continuousAFButton.addEventListener('click', (e) => {
+            if (this.cameraProps.afOn === true) {
+                this.cameraProps.afOn = false;
+                this.cameraProps.continuousAFButton.innerHTML = "AF OFF";
+            } else {
+                this.cameraProps.afOn = true;
+                this.cameraProps.continuousAFButton.innerHTML = "AF ON";
+            }
+        });
+        this.cameraProps.selectCameraButton = this.element.querySelector("#selectCameraButton");
+        this.cameraProps.selectCameraButton.addEventListener('click', (e) => {
+            if (this.cameraProps.selectedCamera === "back") {
+                this.cameraProps.selectedCamera = "front";
+                this.cameraProps.selectCameraButton.innerHTML = "Front Cam";
+            } else {
+                this.cameraProps.selectedCamera = "back";
+                this.cameraProps.selectCameraButton.innerHTML = "Back Cam";
+            }
+        });
         this.cameraProps.canvasgl = this.element.querySelector('#cameraCanvas');
         this.cameraProps.streamPreview = this.element.querySelector('#streamPreview');
 
@@ -195,19 +251,13 @@ export default class WKScanController extends ContainerController {
 
         this.cameraProps.invertRawFrameCheck = this.element.querySelector('#invertRawFrameCheck');
         this.cameraProps.cropRawFrameCheck = this.element.querySelector('#cropRawFrameCheck');
-        
-        this.cameraProps.cropRawFrameCheck.enabled = true;
 
-        this.cameraProps.cropRawFrameCheck.addEventListener('click', (e) => {
-            this.cameraProps.cropRawFrameCheck.checked = !this.cameraProps.cropRawFrameCheck.checked;
-        });
+
         this.cameraProps.ycbcrCheck = this.element.querySelector('#ycbcrCheck');
         this.cameraProps.rawCropRoiInput = this.element.querySelector('#rawCropRoiInput');
         this.cameraProps.rawCropRoiInput.addEventListener("change", () => {
             this.setCropCoords();
         });
-
-
         this.cameraProps.cropRawFrameCheck.addEventListener("change", () => {
             if (this.checked) {
                 this.show(this.cameraProps.rawCropRoiInput);
@@ -224,30 +274,48 @@ export default class WKScanController extends ContainerController {
 
         this.cameraProps.select_preset = this.element.querySelector('#select_preset');
 
-        let i = 0;
+        let i = 0
         for (let presetName of sessionPresetNames) {
             var p_i = new Option(presetName, presetName)
+            // @ts-ignore
             this.cameraProps.select_preset.options.add(p_i);
             i++;
         }
-
+        // @ts-ignore
         for (let i = 0; i < this.cameraProps.select_preset.options.length; i++) {
+            // @ts-ignore
             if (this.cameraProps.select_preset.options[i].value === 'hd1920x1080') {
+                // @ts-ignore
                 this.cameraProps.select_preset.selectedIndex = i;
                 break;
             }
         }
+        // @ts-ignore
         this.cameraProps.selectedPresetName = this.cameraProps.select_preset.options[this.cameraProps.select_preset.selectedIndex].value;
         this.cameraProps.status_test.innerHTML = this.cameraProps.selectedPresetName;
 
-        this.cameraProps.startCameraButtonGL.addEventListener('click', () => {
 
-            this.cameraProps.usingMJPEG = false;
+        this.cameraProps.select_cameras = this.element.querySelector('#select_cameras');
+        // hardcoded cameras list
+        for (let deviceTypeName of deviceTypeNames) {
+            // @ts-ignore
+            this.cameraProps.select_cameras.options.add(new Option(deviceTypeName, deviceTypeName));
+        }
+        // @ts-ignore
+        this.cameraProps.select_cameras.selectedIndex = 0;
+        this.cameraProps.selectedDevicesNames = [deviceTypeNames[0]]
+
+
+        this.cameraProps.startCameraButtonGL.addEventListener('click', (e) => {
+            this.cameraProps.usingMJPEG = false
             this.cameraProps.select_preset.disabled = true;
             this.cameraProps.startCameraButtonGL.disabled = true
             this.cameraProps.startCameraButtonMJPEG.disabled = true
             this.cameraProps.stopCameraButton.disabled = false
-
+            this.cameraProps.ycbcrCheck.disabled = true
+            this.cameraProps.continuousAFButton.disabled = true
+            this.cameraProps.selectCameraButton.disabled = true
+            this.cameraProps.select_cameras.disabled = true
             this.setCropCoords();
             this.show(this.cameraProps.canvasgl);
             this.cameraProps.canvasgl.parentElement.style.display = "block";
@@ -256,32 +324,31 @@ export default class WKScanController extends ContainerController {
             this.show(this.cameraProps.status_fps_preview);
             this.show(this.cameraProps.status_fps_raw);
             this.setupGLView(this.cameraProps.previewWidth, this.cameraProps.previewHeight);
-
-            this.startNativeCamera(
-                this.cameraProps.selectedPresetName,
-                this.cameraProps.flashMode,
+            const config = new PLCameraConfig(this.cameraProps.selectedPresetName, this.cameraProps.flashMode, this.cameraProps.afOn, true, this.cameraProps.selectedDevicesNames, this.cameraProps.selectedCamera, true, this.cameraProps.selectedColorspace, parseFloat(this.cameraProps.torchRange.value));
+            this.startNativeCameraWithConfig(
+                config,
                 "onFramePreview",
                 this.cameraProps.targetPreviewFPS,
                 this.cameraProps.previewWidth,
                 "onFrameGrabbed",
                 this.cameraProps.targetRawFPS,
-                true,
                 undefined,
                 this.cameraProps.rawCrop_x,
                 this.cameraProps.rawCrop_y,
                 this.cameraProps.rawCrop_w,
                 this.cameraProps.rawCrop_h,
                 this.cameraProps.ycbcrCheck.checked);
-        });
-        this.cameraProps.startCameraButtonMJPEG.addEventListener('click', () => {
+        })
+        this.cameraProps.startCameraButtonMJPEG.addEventListener('click', (e) => {
             this.cameraProps.usingMJPEG = true
             this.cameraProps.select_preset.disabled = true;
             this.cameraProps.startCameraButtonGL.disabled = true
             this.cameraProps.startCameraButtonMJPEG.disabled = true
-            
             this.cameraProps.stopCameraButton.disabled = false
-            this.cameraProps.torchRange.disabled = false
             this.cameraProps.ycbcrCheck.disabled = true
+            this.cameraProps.continuousAFButton.disabled = true
+            this.cameraProps.selectCameraButton.disabled = true
+            this.cameraProps.select_cameras.disabled = true
             this.setCropCoords();
             this.hide(this.cameraProps.canvasgl);
             this.cameraProps.canvasgl.parentElement.style.display = "none";
@@ -289,15 +356,14 @@ export default class WKScanController extends ContainerController {
             this.cameraProps.streamPreview.parentElement.style.display = "block";
             this.hide(this.cameraProps.status_fps_preview);
             this.show(this.cameraProps.status_fps_raw);
-            this.startNativeCamera(
-                this.cameraProps.selectedPresetName,
-                this.cameraProps.flashMode,
+            const config = new PLCameraConfig(this.cameraProps.selectedPresetName, this.cameraProps.flashMode, this.cameraProps.afOn, true, this.cameraProps.selectedDevicesNames, this.cameraProps.selectedCamera, true, this.cameraProps.selectedColorspace, parseFloat(this.cameraProps.torchRange.value));
+            this.startNativeCameraWithConfig(
+                config,
                 undefined,
                 this.cameraProps.targetPreviewFPS,
                 this.cameraProps.previewWidth,
                 "onFrameGrabbed",
                 this.cameraProps.targetRawFPS,
-                true,
                 "onCameraInitializedCallBack",
                 this.cameraProps.rawCrop_x,
                 this.cameraProps.rawCrop_y,
@@ -312,16 +378,13 @@ export default class WKScanController extends ContainerController {
             this.cameraProps.startCameraButtonGL.disabled = false
             this.cameraProps.startCameraButtonMJPEG.disabled = false
             this.cameraProps.stopCameraButton.disabled = true
-            this.cameraProps.torchRange.disabled = true
             this.cameraProps.ycbcrCheck.disabled = false
-            
-            time0 = undefined
-            this.cameraProps.globalCounter = 0
-            //this.cameraProps.title_h2.innerHTML = "Camera Test"
+            this.cameraProps.continuousAFButton.disabled = false
+            this.cameraProps.selectCameraButton.disabled = false
+            this.cameraProps.select_cameras.disabled = false
         });
-
         this.cameraProps.takePictureButton1.addEventListener('click', () => {
-            this.takePictureBase64NativeCamera(onPictureTaken)
+            this.takePictureBase64NativeCamera(this.onPictureTaken)
         });
         this.cameraProps.takePictureButton2.addEventListener('click', () => {
             this.getSnapshot().then(b => {
@@ -354,11 +417,17 @@ export default class WKScanController extends ContainerController {
         this.hide(this.cameraProps.status_fps_preview);
         this.hide(this.cameraProps.status_fps_raw);
     }
-
-
     onCameraInitializedCallBack() {
-        this.cameraProps.streamPreview.src = `${this.cameraProps.serverUrl}/mjpeg`;
+        this.cameraProps.streamPreview.src = `${this.cameraProps._serverUrl}/mjpeg`;
+    }
 
+    ChangeDesiredCamerasList() {
+        this.cameraProps.selectedDevicesNames = [];
+        for (let i = 0; i < this.cameraProps.select_cameras.options.length; i++) {
+            if (this.cameraProps.select_cameras.options[i].selected) {
+                this.cameraProps.selectedDevicesNames.push(this.cameraProps.select_cameras.options[i].value);
+            }
+        }
     }
 
     setupGLView(w, h) {
@@ -390,25 +459,6 @@ export default class WKScanController extends ContainerController {
         this.cameraProps.scene.add(plane);
         this.animate();
     }
-
-
-
-
-    /**
-     * Sets the raw crop to a new position
-     * @param  {number} x
-     * @param  {number} y
-     * @param  {number} w
-     * @param  {number} h
-     */
-    setRawCropRoi(x, y, w, h) {
-        this.cameraProps._x = x;
-        this.cameraProps._y = y;
-        this.cameraProps._w = w;
-        this.cameraProps._h = h;
-    }
-
-
 
     animate() {
         window.requestAnimationFrame(() => this.animate());
@@ -602,8 +652,16 @@ export default class WKScanController extends ContainerController {
         ctxCr.putImageData(imageDataCr, 0, 0);
     }
 
+    /**
+     *   
+     * METHODS FROM BRIDGE FILE
+     * 
+     */
+
+
 
     callNative(api, args, callback) {
+        // @ts-ignore
         let handle = window.webkit.messageHandlers[api]
         let payload = {}
         if (args !== undefined) {
@@ -615,17 +673,37 @@ export default class WKScanController extends ContainerController {
         handle.postMessage(payload)
     }
 
-    startNativeCamera(sessionPresetName, flashMode, onFramePreviewCallback = undefined, targetPreviewFps = 25, previewWidth = 640, onFrameGrabbedCallBack = undefined, targetGrabFps = 10, auto_orientation_enabled = false, onCameraInitializedCallBack = undefined, x = undefined, y = undefined, w = undefined, h = undefined, ycbcr = false) {
 
-        this.cameraProps.targetPreviewFps = targetPreviewFps;
-        this.cameraProps.onFramePreviewCallback = onFramePreviewCallback;
-        this.cameraProps.onFrameGrabbedCallBack = onFrameGrabbedCallBack;
-        this.cameraProps.onCameraInitializedCallBack = onCameraInitializedCallBack
-        this.cameraProps.targetGrabFps = targetGrabFps
+
+
+    /**
+     * Starts the native camera frame grabber
+     * @param  {string} sessionPresetName one of the session presets available in sessionPresetNames
+     * @param  {string} flashMode can be `torch`, `flash`, or `off`, all other values will be treated as `auto`
+     * @param  {function} onFramePreviewCallback callBack for each preview frame. Data are received as PLRgbImage. Can be undefined if you want to call 'getPreviewFrame' yourself
+     * @param {number} targetPreviewFps fps for the preview
+     * @param {number} previewWidth width for the preview data
+     * @param {function} onFrameGrabbedCallBack callBack for each raw frame. Data are received as PLRgbImage or PLYCbCrImage. Can be undefined if you want to call 'getRawFrame' or 'getRawFrameYCbCr' yourself
+     * @param {number} targetGrabFps fps for the full resolution raw frame
+     * @param {boolean} [auto_orientation_enabled=false] set to true to rotate image feed with respect to device orientation
+     * @param {function} onCameraInitializedCallBack called after camera initilaization is finished
+     * @param  {number} [x=undefined] RGB/YCbCr raw frame ROI top-left x-coord
+     * @param  {number} [y=undefined] RGB/YCbCr raw frame ROI top-left y-coord
+     * @param  {number} [w=undefined] RGB/YCbCr raw frame ROI width
+     * @param  {number} [h=undefined] RGB/YCbCr raw frame ROI height
+     * @param  {boolean} [ycbcr=false] set to true to receive data as YCbCr 420 in 'onFrameGrabbedCallBack'
+     */
+    startNativeCamera(sessionPresetName, flashMode, onFramePreviewCallback = undefined, targetPreviewFps = 25, previewWidth = 640, onFrameGrabbedCallBack = undefined, targetGrabFps = 10, auto_orientation_enabled = false, onCameraInitializedCallBack = undefined, x = undefined, y = undefined, w = undefined, h = undefined, ycbcr = false) {
+        this.cameraProps._targetPreviewFps = targetPreviewFps
+        this.cameraProps._previewWidth = previewWidth
+        this.cameraProps._onFramePreviewCallback = onFramePreviewCallback;
+        this.cameraProps._onFrameGrabbedCallBack = onFrameGrabbedCallBack;
+        this.cameraProps._onCameraInitializedCallBack = onCameraInitializedCallBack;
         this.cameraProps._ycbcr = ycbcr;
+        this.cameraProps._targetGrabFps = targetGrabFps
         this.setRawCropRoi(x, y, w, h);
         let params = {
-            "onInitializedJsCallback": "onNativeCameraInitialized",
+            "onInitializedJsCallback": this.onNativeCameraInitialized.name,
             "sessionPreset": sessionPresetName,
             "flashMode": flashMode,
             "previewWidth": previewWidth,
@@ -635,29 +713,75 @@ export default class WKScanController extends ContainerController {
     }
 
     /**
- * Stops the native camera
- */
+     * @param  {PLCameraConfig} config
+     * @param  {function} onFramePreviewCallback callBack for each preview frame. Data are received as PLRgbImage. Can be undefined if you want to call 'getPreviewFrame' yourself
+     * @param  {number} targetPreviewFps=25 fps for the preview
+     * @param  {number} previewWidth=640 width for the preview data
+     * @param  {function} onFrameGrabbedCallBack=undefined callBack for each raw frame. Data are received as PLRgbImage or PLYCbCrImage. Can be undefined if you want to call 'getRawFrame' or 'getRawFrameYCbCr' yourself
+     * @param  {number} targetGrabFps=10 fps for the full resolution raw frame
+     * @param  {function} onCameraInitializedCallBack=undefined called after camera initilaization is finished
+     * @param  {number} x=undefined RGB/YCbCr raw frame ROI top-left x-coord
+     * @param  {number} y=undefined RGB/YCbCr raw frame ROI top-left y-coord
+     * @param  {number} w=undefined RGB/YCbCr raw frame ROI width
+     * @param  {number} h=undefined RGB/YCbCr raw frame ROI height
+     * @param  {boolean} ycbcr=false set to true to receive data as YCbCr 420 in 'onFrameGrabbedCallBack'
+     */
+    startNativeCameraWithConfig(config, onFramePreviewCallback = undefined, targetPreviewFps = 25, previewWidth = 640, onFrameGrabbedCallBack = undefined, targetGrabFps = 10, onCameraInitializedCallBack = undefined, x = undefined, y = undefined, w = undefined, h = undefined, ycbcr = false) {
+        this.cameraProps._targetPreviewFps = targetPreviewFps
+        this.cameraProps._previewWidth = previewWidth
+        this.cameraProps._onFramePreviewCallback = onFramePreviewCallback;
+        this.cameraProps._onFrameGrabbedCallBack = onFrameGrabbedCallBack;
+        this.cameraProps._onCameraInitializedCallBack = onCameraInitializedCallBack;
+        this.cameraProps._ycbcr = ycbcr;
+        this.cameraProps._targetGrabFps = targetGrabFps
+        this.setRawCropRoi(x, y, w, h);
+        let params = {
+            "onInitializedJsCallback": this.onNativeCameraInitialized.name,
+            "previewWidth": previewWidth,
+            "config": config
+        }
+        this.callNative("StartCameraWithConfig", params);
+    }
+
+    /**
+     * Sets the raw crop to a new position
+     * @param  {number} x
+     * @param  {number} y
+     * @param  {number} w
+     * @param  {number} h
+     */
+    setRawCropRoi(x, y, w, h) {
+        this.cameraProps._x = x;
+        this.cameraProps._y = y;
+        this.cameraProps._w = w;
+        this.cameraProps._h = h;
+    }
+
+    /**
+     * Stops the native camera
+     */
     stopNativeCamera() {
-        clearInterval(this.cameraProps.previewHandle)
-        this.cameraProps.previewHandle = undefined
-        clearInterval(this.cameraProps.grabHandle)
-        this.cameraProps.grabHandle = undefined
+        clearInterval(this.cameraProps._previewHandle)
+        this.cameraProps._previewHandle = undefined
+        clearInterval(this.cameraProps._grabHandle)
+        this.cameraProps._grabHandle = undefined
         this.callNative("StopCamera")
     }
 
     /**
      * Takes a photo and return it as base64 string ImageData in callback function
-     * @param  {function} onCaptureCallback callback reached when the picture is taken
+     * @param  {function} onCaptureCallback callback reached when the picture is taken. The callback receives the picture as base64 string
      */
-    takePictureBase64NativeCamera(onCaptureCallback) {
-        this.callNative("TakePicture", { "onCaptureJsCallback": onCaptureCallback.name });
+    takePictureBase64NativeCamera(onCaptureCallbackname) {
+        this.callNative("TakePicture", { "onCaptureJsCallback": onCaptureCallbackname.name });
     }
 
     /**
-     * @returns {Promise<Blob>} gets a JPEG snapshot
+     * Gets a JPEG snapshot, corresponds to endpoint /snapshot
+     * @returns {Promise<void | Blob>} JPEG snapshot
      */
     getSnapshot() {
-        return fetch(`${this.cameraProps.serverUrl}/snapshot`)
+        return fetch(`${this.cameraProps._serverUrl}/snapshot`)
             .then(response => {
                 return response.blob();
             })
@@ -665,23 +789,6 @@ export default class WKScanController extends ContainerController {
                 console.log(error);
             })
     }
-
-    /**
-     * Control camera flash mode
-     * @param  {string} mode can be `torch`, `flash`, or `off`, all other values will be treated as `auto`
-     */
-    setFlashModeNativeCamera(mode) {
-        this.callNative("SetFlashMode", { "mode": mode })
-    }
-
-    getCameraConfiguration() {
-        let fetchString = `${this.cameraProps.serverUrl}/cameraconfig`;
-        return fetch(fetchString)
-            .then(response => {
-                return response.json()
-            })
-    }
-
 
     /**
      * Control camera flash mode
@@ -700,8 +807,8 @@ export default class WKScanController extends ContainerController {
     }
 
     /**
-     * Control preferred colorspace. The call may not succeed if the colorspace is not available. 
-     * In this case the colorspace is reverted to undefined. 
+     * Control preferred colorspace. The call may not succeed if the colorspace is not available.
+     * In this case the colorspace is reverted to undefined.
      * @param  {string} colorspace 'sRGB', 'HLG_BT2020', 'P3_D65'
      */
     setPreferredColorSpaceNativeCamera(colorspace) {
@@ -709,20 +816,19 @@ export default class WKScanController extends ContainerController {
     }
 
     onNativeCameraInitialized(wsPort) {
-        this.cameraProps.serverUrl = `http://localhost:${wsPort}`;
-        if (this.cameraProps.onFramePreviewCallback !== undefined) {
-            this.cameraProps.previewHandle = setInterval(() => {
+        this.cameraProps._serverUrl = `http://localhost:${wsPort}`
+        if (this.cameraProps._onFramePreviewCallback !== undefined) {
+            this.cameraProps._previewHandle = setInterval(() => {
                 let t0 = performance.now();
                 this.getPreviewFrame().then(image => {
                     if (image instanceof PLRgbImage) {
                         this.onFramePreview(image, performance.now() - t0)
                     }
                 });
-            }, 1000 / this.cameraProps.targetPreviewFps);
+            }, 1000 / this.cameraProps._targetPreviewFps);
         }
-
-        if (this.cameraProps.onFrameGrabbedCallBack !== undefined) {
-            this.cameraProps.grabHandle = setInterval(() => {
+        if (this.cameraProps._onFrameGrabbedCallBack !== undefined) {
+            this.cameraProps._grabHandle = setInterval(() => {
                 let t0 = performance.now();
                 if (this.cameraProps._ycbcr) {
                     this.getRawFrameYCbCr(this.cameraProps._x, this.cameraProps._y, this.cameraProps._w, this.cameraProps._h).then(image => {
@@ -731,15 +837,15 @@ export default class WKScanController extends ContainerController {
                         }
                     })
                 } else {
-                    this.getRawFrame(_x, _y, _w, _h).then(image => {
+                    this.getRawFrame(this.cameraProps._x, this.cameraProps._y, this.cameraProps._w, this.cameraProps._h).then(image => {
                         if (image instanceof PLRgbImage) {
                             this.onFrameGrabbed(image, performance.now() - t0);
                         }
                     })
                 }
-            }, 1000 / this.cameraProps.targetGrabFps)
+            }, 1000 / this.cameraProps._targetGrabFps)
         }
-        if (this.cameraProps.onCameraInitializedCallBack !== undefined) {
+        if (this.cameraProps._onCameraInitializedCallBack !== undefined) {
             setTimeout(() => {
                 this.onCameraInitializedCallBack();
             }, 500);
@@ -747,11 +853,11 @@ export default class WKScanController extends ContainerController {
     }
 
     /**
-     * @returns  {Promise<PLRgbImage>} gets a downsampled RGB frame for preview
+     * Gets a downsampled RGB frame for preview, corresponds to endpoint /previewframe
+     * @returns  {Promise<void | PLRgbImage>} Downsampled RGB frame for preview
      */
     getPreviewFrame() {
-
-        return fetch(`${this.cameraProps.serverUrl}/previewframe`)
+        return fetch(`${this.cameraProps._serverUrl}/previewframe`)
             .then(response => {
                 let image = this.getPLRgbImageFromResponse(response);
                 return image;
@@ -762,15 +868,15 @@ export default class WKScanController extends ContainerController {
     }
 
     /**
-     * Gets a raw RGB frame. A ROI can be specified.
-     * @param  {number} x=undefined
-     * @param  {number} y=undefined
-     * @param  {number} w=undefined
-     * @param  {number} h=undefined
-     * @returns {Promise<PLRgbImage>} a raw RGB frame
+     * Gets a raw RGB frame. A ROI can be specified, corresponds to endpoint /rawframe
+     * @param  {number} [x=undefined]
+     * @param  {number} [y=undefined]
+     * @param  {number} [w=undefined]
+     * @param  {number} [h=undefined]
+     * @returns {Promise<void | PLRgbImage>} a raw RGB frame
      */
     getRawFrame(x = undefined, y = undefined, w = undefined, h = undefined) {
-        let fetchString = `${this.cameraProps.serverUrl}/rawframe`;
+        let fetchString = `${this.cameraProps._serverUrl}/rawframe`;
         let params = {};
         if (x !== undefined) {
             params.x = x;
@@ -785,6 +891,7 @@ export default class WKScanController extends ContainerController {
             params.h = h;
         }
         if (Object.keys(params).length > 0) {
+            // @ts-ignore
             const urlParams = new URLSearchParams(params);
             fetchString = `${fetchString}?${urlParams.toString()}`;
         }
@@ -806,7 +913,7 @@ export default class WKScanController extends ContainerController {
      * @returns {Promise<Void | PLYCbCrImage>} a raw YCbCr frame
      */
     getRawFrameYCbCr(x = undefined, y = undefined, w = undefined, h = undefined) {
-        let fetchString = `${this.cameraProps.serverUrl}/rawframe_ycbcr`;
+        let fetchString = `${this.cameraProps._serverUrl}/rawframe_ycbcr`;
         let params = {};
         if (x !== undefined) {
             params.x = x;
@@ -834,10 +941,21 @@ export default class WKScanController extends ContainerController {
                 console.log(error);
             })
     }
+    /**
+     * Get the current camera configuration, corresponds to endpoint /cameraconfig
+     * @returns {Promise<any>} the current camera configuration
+     */
+    getCameraConfiguration() {
+        let fetchString = `${this.cameraProps._serverUrl}/cameraconfig`;
+        return fetch(fetchString)
+            .then(response => {
+                return response.json()
+            })
+    }
 
     /**
      * Packs a response from endpoints providing raw rgb buffer as octet-stream and image size in headers
-     * 
+     *
      * @param  {Response} response
      * @returns {Promise<PLRgbImage>} the image in a promise
      */
@@ -854,7 +972,6 @@ export default class WKScanController extends ContainerController {
         } else {
             frame_h = this.cameraProps.previewHeight;
         }
-
         return response.blob().then(b => {
             return b.arrayBuffer().then(a => {
                 let image = new PLRgbImage(a, frame_w, frame_h);
@@ -865,7 +982,7 @@ export default class WKScanController extends ContainerController {
 
     /**
      * Packs a response from endpoints providing raw YCbCr 420 buffer as octet-stream and image size in headers
-     * 
+     *
      * @param  {Response} response
      * @returns {Promise<PLYCbCrImage>} the image in a promise
      */
@@ -888,5 +1005,5 @@ export default class WKScanController extends ContainerController {
                 return image;
             })
         })
-    }
+    } 
 }
