@@ -21,6 +21,11 @@
       "path": "./scan"
     },
     {
+      "name": "WKCamera",
+      "tag": "WKCamera",
+      "path": "./wkcamera"
+    },
+    {
       "name": "History",
       "tag": "history",
       "path": "./history"
